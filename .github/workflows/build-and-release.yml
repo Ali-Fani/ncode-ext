@@ -1,0 +1,60 @@
+name: Build and Release with Nuitka (using uv)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      # Step 1: Check out the repository.
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Python.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      # Step 3: Install uv.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        # Optionally, pin to a specific uv version:
+        # with:
+        #   version: "0.5.29"
+
+      # Step 4: Install project dependencies using uv's project management.
+      # This command reads the pyproject.toml (and updates uv.lock) and installs all required packages.
+      - name: Sync project dependencies with uv
+        run: uv sync
+
+
+      # Step 6: Build the executable with Nuitka.
+      - name: Build executable with Nuitka using uv
+        run: uv run python -m nuitka --onefile --windows-icon-from-ico=./icon.ico --product-name='National Number Extractor' --product-version=1.0.0.0 --file-description='Extracts names with national number and puts them in excel file' --copyright='Ali Fani' --report=compilation-report.xml .\pextract.py
+
+      # Step 7: Create a new GitHub release.
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: "release-${{ github.sha }}"
+          release_name: "Release ${{ github.sha }}"
+          body: "Automated release for commit ${{ github.sha }}"
+          draft: false
+          prerelease: false
+
+      # Step 8: Upload the executable to the release.
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./pextract.exe
+          asset_name: pextract.exe
+          asset_content_type: application/octet-stream
