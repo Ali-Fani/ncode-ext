@@ -19,21 +19,19 @@ jobs:
           python-version: '3.8'
 
       # Step 3: Install uv.
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        # Optionally, pin to a specific uv version:
-        # with:
-        #   version: "0.5.29"
 
-      # Step 4: Install project dependencies using uv's project management.
-      # This command reads the pyproject.toml (and updates uv.lock) and installs all required packages.
-      - name: Sync project dependencies with uv
-        run: uv sync
-
+      - uses: Nuitka/Nuitka-Action@main
+        with:
+          nuitka-version: main
+          script-name: pextract.py
+          onefile: true
+          windows-icon-from-ico: icon.ico
+          product-name: National Number Extractor
+          copyright: 'Ali Fani'
 
       # Step 6: Build the executable with Nuitka.
-      - name: Build executable with Nuitka using uv
-        run: uv run python -m nuitka --onefile --windows-icon-from-ico=./icon.ico --product-name='National Number Extractor' --product-version=1.0.0.0 --file-description='Extracts names with national number and puts them in excel file' --copyright='Ali Fani' --report=compilation-report.xml .\pextract.py
+      # - name: Build executable with Nuitka using uv
+      #   run: uv run python -m nuitka --onefile --windows-icon-from-ico=./icon.ico --product-name='National Number Extractor' --product-version=1.0.0.0 --file-description='Extracts names with national number and puts them in excel file' --copyright='Ali Fani' --report=compilation-report.xml .\pextract.py
 
       # Step 7: Create a new GitHub release.
       - name: Create Release
