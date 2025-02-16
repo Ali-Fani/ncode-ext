@@ -1,10 +1,10 @@
 import os
 import re
-import pandas as pd
-from tqdm import tqdm
-from pathlib import Path
-from colorama import init, Fore, Style
 import time
+from pathlib import Path
+from tqdm import tqdm
+from colorama import init, Fore, Style
+from openpyxl import Workbook
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 # Initialize colorama
@@ -24,92 +24,112 @@ def print_ascii_art():
 
 def scan_files():
     """
-    Scan files in current directory for national numbers and create Excel report
+    Scan files in the current directory for national numbers and create an Excel report.
+    This version uses openpyxl directly to build the Excel file, removing the need for pandas.
     """
     print_ascii_art()
     time.sleep(0.5)  # Pause for dramatic effect
-    
+
     print(Fore.CYAN + "=== Starting File Scanner ===" + Style.RESET_ALL)
-    
-    # Configuration
+
+    # Configuration: precompile regex pattern for matching 9 or 10 digit national numbers
     pattern = r'(?<![0-9\u06F0-\u06F9])((?:[0-9\u06F0-\u06F9]{10})|(?:[0-9\u06F0-\u06F9]{9}))(?![0-9\u06F0-\u06F9])'
+    regex = re.compile(pattern)
+
     root_dir = os.getcwd()
     print(Fore.CYAN + f"📂 Scanning directory: {root_dir}" + Style.RESET_ALL)
-    
+
     matching_results = []
-    
-    # Gather all files
-    print(Fore.YELLOW + "🔍 Gathering file list..." + Style.RESET_ALL)
-    files = list(Path(root_dir).rglob('*'))
-    
-    total_files = len(files)
+
+    # Count total files using os.walk to avoid building a huge list in memory
+    total_files = sum(len(files) for _, _, files in os.walk(root_dir))
     print(Fore.YELLOW + f"📑 Scanning {total_files} file(s) for matching national codes..." + Style.RESET_ALL)
-    
-    # Scan files with progress bar
-    for file in tqdm(files, desc="🔍 Scanning Files", bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Style.RESET_ALL)):
-        if file.is_file():  # Only process files, not directories
-            matches = re.findall(pattern, file.name)
+
+    pbar = tqdm(total=total_files, desc="🔍 Scanning Files", bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Style.RESET_ALL))
+    for dirpath, _, filenames in os.walk(root_dir):
+        for filename in filenames:
+            pbar.update(1)
+            matches = regex.findall(filename)
             for match in matches:
                 national_number = match
                 if len(national_number) == 9:
                     national_number = "0" + national_number
                 matching_results.append({
                     'NationalNumber': national_number,
-                    'FilePath': str(file.absolute())
+                    'FilePath': os.path.join(dirpath, filename)
                 })
-                print(Fore.GREEN + f"✅ Match: '{file.name}' -> National Number: {national_number}" + Style.RESET_ALL)
-    
+                # Optionally comment out the line below for performance when many matches are found
+                # print(Fore.GREEN + f"✅ Match: '{filename}' -> National Number: {national_number}" + Style.RESET_ALL)
+    pbar.close()
+
     print(Fore.CYAN + f"✨ Finished scanning. Found {len(matching_results)} matching file(s)." + Style.RESET_ALL)
-    
+
     if not matching_results:
         print(Fore.RED + "❌ No matches found. Exiting..." + Style.RESET_ALL)
         return
-    
-    # Create DataFrames
-    all_matches_df = pd.DataFrame(matching_results)
-    unique_numbers_df = all_matches_df.drop_duplicates(subset=['NationalNumber'])
-    
-    print(Fore.GREEN + f"📊 Found {len(unique_numbers_df)} unique national number(s)." + Style.RESET_ALL)
-    
-    # Create Excel writer
+
+    # Create a list for unique national numbers (keeping the first occurrence)
+    unique_results = []
+    seen = set()
+    for entry in matching_results:
+        if entry['NationalNumber'] not in seen:
+            seen.add(entry['NationalNumber'])
+            unique_results.append(entry)
+
+    print(Fore.GREEN + f"📊 Found {len(unique_results)} unique national number(s)." + Style.RESET_ALL)
+
+    # Create an Excel workbook using openpyxl
+    wb = Workbook()
+    ws_all = wb.active
+    ws_all.title = "All Matches"
+    ws_all.append(["NationalNumber", "FilePath"])  # Header
+
+    for entry in matching_results:
+        ws_all.append([entry['NationalNumber'], entry['FilePath']])
+
+    # Format "All Matches" sheet as a table
+    all_rows = ws_all.max_row
+    data_range_all = f"A1:B{all_rows}"
+    table_all = Table(displayName="Table_All_Matches", ref=data_range_all)
+    style = TableStyleInfo(
+        name="TableStyleMedium2",
+        showFirstColumn=True,
+        showLastColumn=False,
+        showRowStripes=True,
+        showColumnStripes=False
+    )
+    table_all.tableStyleInfo = style
+    ws_all.add_table(table_all)
+    ws_all.column_dimensions['A'].width = 20  # National Number column
+    ws_all.column_dimensions['B'].width = 100  # File Path column
+
+    # Format first column as text to preserve leading zeros
+    for row in ws_all.iter_rows(min_row=2, max_row=all_rows, min_col=1, max_col=1):
+        for cell in row:
+            cell.number_format = '@'
+
+    # Create a new sheet for Unique Numbers
+    ws_unique = wb.create_sheet(title="Unique Numbers")
+    ws_unique.append(["NationalNumber", "FilePath"])  # Header
+
+    for entry in unique_results:
+        ws_unique.append([entry['NationalNumber'], entry['FilePath']])
+
+    unique_rows = ws_unique.max_row
+    data_range_unique = f"A1:B{unique_rows}"
+    table_unique = Table(displayName="Table_Unique_Numbers", ref=data_range_unique)
+    table_unique.tableStyleInfo = style
+    ws_unique.add_table(table_unique)
+    ws_unique.column_dimensions['A'].width = 20
+    ws_unique.column_dimensions['B'].width = 100
+
+    for row in ws_unique.iter_rows(min_row=2, max_row=unique_rows, min_col=1, max_col=1):
+        for cell in row:
+            cell.number_format = '@'
+
     output_path = os.path.join(root_dir, "matching_files.xlsx")
-    print(Fore.YELLOW + f"📝 Creating Excel file at: {output_path}" + Style.RESET_ALL)
-    
-    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-        # Write sheets
-        all_matches_df.to_excel(writer, sheet_name='All Matches', index=False)
-        unique_numbers_df.to_excel(writer, sheet_name='Unique Numbers', index=False)
-        
-        # Get the workbook
-        workbook = writer.book
-        
-        # Format both sheets
-        for sheet_name in writer.sheets:
-            worksheet = writer.sheets[sheet_name]
-            
-            # Format as table
-            data_range = f"A1:B{len(all_matches_df) + 1}" if sheet_name == 'All Matches' else f"A1:B{len(unique_numbers_df) + 1}"
-            table = Table(displayName=f"Table_{sheet_name.replace(' ', '_')}", ref=data_range)
-            
-            # Add a default style
-            style = TableStyleInfo(
-                name="TableStyleMedium2",
-                showFirstColumn=True,
-                showLastColumn=False,
-                showRowStripes=True,
-                showColumnStripes=False
-            )
-            table.tableStyleInfo = style
-            worksheet.add_table(table)
-            
-            # Set column widths
-            worksheet.column_dimensions['A'].width = 20  # National Number column
-            worksheet.column_dimensions['B'].width = 100  # File Path column
-            
-            # Format first column as text to preserve leading zeros
-            for cell in worksheet['A']:
-                cell.number_format = '@'
-    
+    wb.save(output_path)
+
     print(Fore.CYAN + """
 ╔════════════════════════════════════╗
 ║ ✨ Excel file created successfully ✨ ║
