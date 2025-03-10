@@ -1,27 +1,17 @@
 import os
+from os import scandir
 import re
 import pylightxl as xl
-from colorama import init, Fore, Style
-try:
-    from tqdm import tqdm
-except ImportError:
-    tqdm = None
 
-# Initialize colorama
-init(autoreset=True)
 
-# Flags to control logging and progress bar
-ENABLE_LOGGING = False
-SHOW_PROGRESS = False
 
-# Directories to exclude
+ENABLE_LOGGING = True
+SHOW_PROGRESS = True
 EXCLUDE_DIRS = {'.git', '.venv', 'venv', 'env', '.env', 'ENV'}
 
-def log(message, color=Fore.WHITE):
-    if ENABLE_LOGGING:
-        print(color + message + Style.RESET_ALL)
 
-def print_ascii_art():
+
+def print_ascii_art():       
     if ENABLE_LOGGING:
         ascii_art = """
     ███████╗██╗██╗     ███████╗    ███████╗ ██████╗ █████╗ ███╗   ██╗
@@ -31,55 +21,49 @@ def print_ascii_art():
     ██║     ██║███████╗███████╗    ███████║╚██████╗██║  ██║██║ ╚████║
     ╚═╝     ╚═╝╚══════╝╚══════╝    ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
         """
-        print(Fore.CYAN + ascii_art + Style.RESET_ALL)
+        print(ascii_art)
 
 def scan_files():
     print_ascii_art()
-    log("=== Starting File Scanner ===", Fore.CYAN)
+    print("=== Starting File Scanner ===")
 
-    # Precompile regex pattern for matching 9 or 10 digit national numbers
-    pattern = r'(?<!\d)(\d{9}|\d{10})(?!\d)'
-    regex = re.compile(pattern)
-
+    pattern = re.compile(r'(?<!\d)(\d{9}|\d{10})(?!\d)')
     root_dir = os.getcwd()
-    log(f"Scanning directory: {root_dir}", Fore.CYAN)
+    print(f"Scanning directory: {root_dir}")
 
     matching_results = []
-    total_files = sum(len(files) for _, _, files in os.walk(root_dir))
-    log(f"Scanning {total_files} file(s) for matching national codes...", Fore.YELLOW)
+    total_files = 0
 
-    use_progress = SHOW_PROGRESS and tqdm is not None
-    pbar = tqdm(total=total_files, desc="Scanning Files") if use_progress else None
+    def scan_directory(path):
+        nonlocal total_files
+        try:
+            with scandir(path) as entries:
+                for entry in entries:
+                    if entry.is_dir() and entry.name not in EXCLUDE_DIRS:
+                        scan_directory(entry.path)
+                    elif entry.is_file():
+                        total_files += 1
+                        matches = pattern.findall(entry.name)
+                        for match in matches:
+                            national_number = match.zfill(10)
+                            matching_results.append({
+                                'NationalNumber': national_number,
+                                'FilePath': entry.path
+                            })
+                            print(f"Match: '{entry.name}' -> National Number: {national_number}")
+        except PermissionError:
+            pass
 
-    for dirpath, dirnames, filenames in os.walk(root_dir):
-        # Exclude specified directories
-        dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
-
-        for filename in filenames:
-            if pbar:
-                pbar.update(1)
-            matches = regex.findall(filename)
-            for match in matches:
-                national_number = match.zfill(10)  # Ensure the number is 10 digits
-                matching_results.append({
-                    'NationalNumber': national_number,
-                    'FilePath': os.path.join(dirpath, filename)
-                })
-                log(f"Match: '{filename}' -> National Number: {national_number}", Fore.GREEN)
-    if pbar:
-        pbar.close()
-
-    log(f"Finished scanning. Found {len(matching_results)} matching file(s).", Fore.CYAN)
+    scan_directory(root_dir)
+    print(f"Scanning {total_files} file(s) for matching national codes...")
 
     if not matching_results:
-        log("No matches found. Exiting...", Fore.RED)
+        print("No matches found. Exiting...")
         return
 
-    # Deduplicate entries by national number
     unique_results = {entry['NationalNumber']: entry for entry in matching_results}.values()
-    log(f"Found {len(unique_results)} unique national number(s).", Fore.GREEN)
+    print(f"Found {len(unique_results)} unique national number(s).")
 
-    # Prepare data for worksheets
     data_all = [["NationalNumber", "FilePath"]] + [
         [entry['NationalNumber'], entry['FilePath']] for entry in matching_results
     ]
@@ -87,7 +71,6 @@ def scan_files():
         [entry['NationalNumber'], entry['FilePath']] for entry in unique_results
     ]
 
-    # Create a new pylightxl Database and add worksheets
     db = xl.Database()
     db.add_ws(ws="All Matches")
     for r, row in enumerate(data_all, start=1):
@@ -101,7 +84,7 @@ def scan_files():
 
     output_path = os.path.join(root_dir, "matching_files.xlsx")
     xl.writexl(db, output_path)
-    log("Excel file created successfully!", Fore.CYAN)
+    print("Excel file created successfully!")
 
 if __name__ == "__main__":
     scan_files()
