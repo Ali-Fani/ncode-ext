@@ -33,7 +33,7 @@ jobs:
 
       # Step 6: Build the executable with Nuitka.
       - name: Build executable with Nuitka using uv
-        run: uv run python -m pyinstaller --onefile --version-file=.\version.rc --icon='.\icon.ico' .\pextract.py
+        run: pyinstaller --onefile --version-file=.\version.rc --icon='.\icon.ico' .\pextract.py
 
       # Step 7: Create a new GitHub release.
       - name: Create Release
