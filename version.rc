@@ -1,0 +1,31 @@
+# UTF-8
+#
+# For more details on what these fields mean, see:
+# https://docs.microsoft.com/en-us/windows/win32/menurc/versioninfo-resource
+
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 0, 0, 0),
+    prodvers=(1, 0, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x4,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+    ),
+  kids=[
+    StringFileInfo([
+      StringTable('040904b0', [
+        StringStruct('FileDescription', 'Dead simple app that extracts national code from directory file names'),
+        StringStruct('FileVersion', '1.5.0.0'),
+        StringStruct('InternalName', 'ncode-ext'),
+        StringStruct('LegalCopyright', 'Copyright (C) 2025 Ali Fani'),
+        StringStruct('OriginalFilename', 'pextract.exe'),
+        StringStruct('ProductName', 'National code Extractor'),
+        StringStruct('ProductVersion', '1.5.0.0')
+      ])
+    ]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)
