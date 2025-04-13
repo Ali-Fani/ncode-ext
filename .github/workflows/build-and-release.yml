@@ -34,7 +34,7 @@ jobs:
 
       # Step 6: Build the executable with Nuitka.
       - name: Build executable with Nuitka using uv
-        run: python -m pyinstaller --onefile --version-file=.\version.rc --icon='.\icon.ico' .\pextract.py
+        run: nuitka --onefile --windows-icon-from-ico=./icon.ico --product-name='National Number Extractor' --product-version=1.0.0.0 --file-description='Extracts names with national number and puts them in excel file' --copyright='Ali Fani' --report=compilation-report.xml .\pextract.py 
 
       # Step 7: Create a new GitHub release.
       - name: Create Release
